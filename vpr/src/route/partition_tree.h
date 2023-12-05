@@ -25,6 +25,19 @@ inline Side operator!(const Side& rhs) {
     return Side(!size_t(rhs));
 }
 
+/** Part of a net. Used by \ref DecompNetlistRouter. */
+class VirtualNet {
+  public:
+    /** The net in question. */
+    ParentNetId net_id;
+    /** Clipped bounding box. This is needed to enable decomposing a net multiple times.
+     * Otherwise we would need a history of side types and cutlines to compute the bbox. */
+    t_bb clipped_bb;
+    /** Times decomposed -- don't decompose vnets too deeply or
+     * it disturbs net ordering when it's eventually disabled & creates a runtime bump. */
+    int times_decomposed = 0;
+};
+
 /** Spatial partition tree for routing.
  *
  * This divides the netlist into a tree of regions, so that nets with non-overlapping
@@ -42,6 +55,8 @@ class PartitionTreeNode {
   public:
     /** Nets claimed by this node (intersected by cutline if branch, nets in final region if leaf) */
     std::vector<ParentNetId> nets;
+    /** Nets assigned by the parent of this node (\see DecompNetlistRouter) */
+    std::vector<VirtualNet> vnets;
     /** Left subtree. */
     std::unique_ptr<PartitionTreeNode> left = nullptr;
     /** Right subtree. */

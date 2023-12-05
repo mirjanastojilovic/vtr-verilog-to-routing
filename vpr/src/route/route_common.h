@@ -14,6 +14,21 @@
  * that the occupancy arrays are up to date when it is called. */
 bool feasible_routing();
 
+/** Is \p inode inside this bounding box?
+ * In the context of the parallel router, an inode is inside a bounding box
+ * if its (xlow, ylow, z) point is inside it */
+inline bool inside_bb(RRNodeId inode, const t_bb& bb) {
+    auto& device_ctx = g_vpr_ctx.device();
+    const auto& rr_graph = device_ctx.rr_graph;
+
+    int x, y, z;
+    x = rr_graph.node_xlow(inode);
+    y = rr_graph.node_ylow(inode);
+    z = rr_graph.node_layer(inode);
+
+    return x >= bb.xmin && x <= bb.xmax && y >= bb.ymin && y <= bb.ymax && z <= bb.layer_min && z >= bb.layer_max;
+}
+
 vtr::vector<ParentNetId, t_bb> load_route_bb(const Netlist<>& net_list,
                                              int bb_factor);
 

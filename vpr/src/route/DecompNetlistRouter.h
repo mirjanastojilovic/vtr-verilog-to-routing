@@ -1,27 +1,16 @@
 #pragma once
 
-/** @file Parallel case for NetlistRouter. Builds a \ref PartitionTree from the
- * netlist according to net bounding boxes. Tree nodes are then routed in parallel
- * using tbb::task_group. Each task routes the nets inside a node serially and then adds
- * its child nodes to the task queue. This approach is serially equivalent & deterministic,
- * but it can reduce QoR in congested cases [0].
- *
- * Note that the parallel router does not support graphical router breakpoints.
- *
- * [0]: F. Koşar, "A net-decomposing parallel FPGA router", MS thesis, UofT ECE, 2023 */
+/** @file Parallel and net-decomposing case for NetlistRouter. Works like
+ * \see ParallelNetlistRouter, but tries to "decompose" nets and assign them to
+ * the next level of the partition tree where possible. */
 #include "netlist_routers.h"
 
 #include <tbb/task_group.h>
 
-/** Parallel impl for NetlistRouter.
- * Holds enough context members to glue together ConnectionRouter and net routing functions,
- * such as \ref route_net. Keeps the members in thread-local storage where needed,
- * i.e. ConnectionRouters and RouteIterResults-es.
- * See \ref route_net. */
 template<typename HeapType>
-class ParallelNetlistRouter : public NetlistRouter {
+class DecompNetlistRouter : public NetlistRouter {
   public:
-    ParallelNetlistRouter(
+    DecompNetlistRouter(
         const Netlist<>& net_list,
         const RouterLookahead* router_lookahead,
         const t_router_opts& router_opts,
@@ -45,8 +34,11 @@ class ParallelNetlistRouter : public NetlistRouter {
         , _budgeting_inf(budgeting_inf)
         , _routing_predictor(routing_predictor)
         , _choking_spots(choking_spots)
-        , _is_flat(is_flat) {}
-    ~ParallelNetlistRouter() {}
+        , _is_flat(is_flat)
+        , _net_known_samples(net_list.nets().size())
+        , _net_known_samples_m(net_list.nets().size())
+        , _is_decomp_disabled(net_list.nets().size()) {}
+    ~DecompNetlistRouter() {}
 
     /** Run a single iteration of netlist routing for this->_net_list. This usually means calling
      * \ref route_net for each net, which will handle other global updates.
@@ -56,6 +48,16 @@ class ParallelNetlistRouter : public NetlistRouter {
     void set_timing_info(std::shared_ptr<SetupHoldTimingInfo> timing_info);
 
   private:
+    /** Should we decompose this net? */
+    bool should_decompose_net(ParentNetId net_id, const PartitionTreeNode& node);
+    /** Get a bitset with sinks to route before net decomposition */
+    vtr::dynamic_bitset<> get_decomposition_mask(ParentNetId net_id, const PartitionTreeNode& node);
+    /** Get a bitset with sinks to route before virtual net decomposition */
+    vtr::dynamic_bitset<> get_vnet_decomposition_mask(const VirtualNet& vnet, const PartitionTreeNode& node);
+    /** Decompose and route a regular net. Output the resulting vnets to \p left and \p right. Return success status. */
+    bool decompose_and_route_net(ParentNetId net_id, const PartitionTreeNode& node, VirtualNet& left, VirtualNet& right);
+    /** Decompose and route a virtual net. Output the resulting vnets to \p left and \p right. Return success status. */
+    bool decompose_and_route_vnet(VirtualNet& vnet, const PartitionTreeNode& node, VirtualNet& left, VirtualNet& right);
     /** A single task to route nets inside a PartitionTree node and add tasks for its child nodes to task group \p g. */
     void route_partition_tree_node(tbb::task_group& g, PartitionTreeNode& node);
 
@@ -93,6 +95,16 @@ class ParallelNetlistRouter : public NetlistRouter {
     int _itry;
     float _pres_fac;
     float _worst_neg_slack;
+
+    /* Sinks to be always sampled for decomposition for each net */
+    vtr::vector<ParentNetId, vtr::dynamic_bitset<>> _net_known_samples;
+    vtr::vector<ParentNetId, std::mutex> _net_known_samples_m;
+
+    /* Is decomposition disabled for this net? */
+    vtr::vector<ParentNetId, bool> _is_decomp_disabled;
 };
 
-#include "ParallelNetlistRouter.tpp"
+/** Maximum number of iterations for net decomposition */
+const int MAX_DECOMP_ITER = 5;
+
+#include "DecompNetlistRouter.tpp"
