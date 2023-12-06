@@ -26,7 +26,7 @@ inline bool inside_bb(RRNodeId inode, const t_bb& bb) {
     y = rr_graph.node_ylow(inode);
     z = rr_graph.node_layer(inode);
 
-    return x >= bb.xmin && x <= bb.xmax && y >= bb.ymin && y <= bb.ymax && z <= bb.layer_min && z >= bb.layer_max;
+    return x >= bb.xmin && x <= bb.xmax && y >= bb.ymin && y <= bb.ymax && z >= bb.layer_min && z <= bb.layer_max;
 }
 
 vtr::vector<ParentNetId, t_bb> load_route_bb(const Netlist<>& net_list,

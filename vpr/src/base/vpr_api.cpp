@@ -302,6 +302,10 @@ void vpr_init_with_options(const t_options* options, t_vpr_setup* vpr_setup, t_a
              &vpr_setup->PowerOpts,
              vpr_setup);
 
+    /* XXX: Hardcode parallel router for testing */
+    vpr_setup->RouterOpts.router_algorithm = PARALLEL_DECOMP;
+    vpr_setup->num_workers = 4;
+
     /* Check inputs are reasonable */
     CheckArch(*arch);
 
